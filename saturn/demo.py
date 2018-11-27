@@ -4,6 +4,8 @@ rule_prefix = "update-"
 
 # testing
 rules = get_rules_by_prefix(rule_prefix)
+run_task(rules[0])
+
 print(get_logs_for_rule(rules[0]))
 for rule in rules:
     print(rule["name"], rule["enabled"], rule["schedule"], rule["target_command"])
