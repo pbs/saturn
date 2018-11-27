@@ -30,6 +30,14 @@ def get_rules_by_prefix(prefix):
     return results
 
 
+def get_rule_by_name(job_name):
+    # TODO: optimize this, skip the list and go straight to rule
+    rules = get_rules_by_prefix("update-")
+    for rule in rules:
+        if rule["name"] == job_name:
+            return rule
+
+
 def get_logs_for_rule(rule):
     ecs = boto3.client("ecs")
 
@@ -44,7 +52,7 @@ def get_logs_for_rule(rule):
     log_group = log_config["options"]["awslogs-group"]
     log_prefix = log_config["options"]["awslogs-stream-prefix"]
     name = task_def["containerDefinitions"][0]["name"]
-    return get_log_streams(log_group, f"{log_prefix}/{name}/")
+    return log_group, get_log_streams(log_group, f"{log_prefix}/{name}/")
 
 
 def get_log_streams(log_group, prefix=""):
