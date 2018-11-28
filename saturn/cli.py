@@ -1,3 +1,4 @@
+import sys
 import time
 import click
 from tabulate import tabulate
@@ -48,35 +49,43 @@ def runs(job_name, n):
         first = log["firstEventTimestamp"]
         last = log["lastEventTimestamp"]
         elapsed = format_seconds((last - first) / 1000)
-        display_runs.append([
-            click.style(log["logStreamName"][-hash_length:], bold=True),
-            time.ctime(log["lastEventTimestamp"] / 1000),
-            elapsed
-        ])
+        display_runs.append(
+            [
+                click.style(log["logStreamName"][-hash_length:], bold=True),
+                time.ctime(last / 1000),
+                elapsed,
+            ]
+        )
 
     click.echo(tabulate(display_runs, headers=["run id", "last event", "elapsed"]))
+
 
 @click.command()
 @click.argument("job-name")
 @click.argument("log-id", default="latest")
-def logs(job_name, log_id):
+@click.option("-n", default=50, help="number of lines to print")
+@click.option("--timestamp/--no-timestamp", help="add timestamp")
+def logs(job_name, log_id, n, page, timestamp):
     """
         Show logs for specific run.
 
         If LOG_ID is provided, will show a specific log, otherwise the latest log will be displayed.
     """
-    log_group, runs = get_logs_for_rule(job_name, 1)
+    log_group, runs = get_logs_for_rule(job_name, 10)
     if log_id == "latest":
         run = runs[0]
     else:
         for run in runs:
-            if run["logStreamName"].endswith(default):
+            if run["logStreamName"].endswith(log_id):
                 break
         else:
-            print("no such run")
+            click.secho("no such run", fg="red")
+            sys.exit(1)
 
-    for line in get_log_for_run(log_group, run["logStreamName"]):
-        print(click.style(time.ctime(line["timestamp"] / 1000), fg="blue"), line["message"])
+    for line in get_log_for_run(log_group, run["logStreamName"], n):
+        if timestamp:
+            click.secho(time.ctime(line["timestamp"] / 1000) + " ", fg="blue", nl=False)
+        click.echo(line["message"])
 
 
 cli.add_command(tasks)

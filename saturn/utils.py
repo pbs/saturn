@@ -9,7 +9,7 @@ class StopPagination(Exception):
 
 def format_seconds(seconds):
     seconds = int(seconds)
-    elapsed = f'{seconds//3600}:{(seconds%3600//60):02d}:{seconds%3600%60:02d}'
+    elapsed = f"{seconds//3600}:{(seconds%3600//60):02d}:{seconds%3600%60:02d}"
     return elapsed
 
 
@@ -83,28 +83,16 @@ def get_logs_for_rule(rule_name, n):
     return log_group, log_streams
 
 
-def get_log_for_run(log_group_name, log_stream_name):
+def get_log_for_run(log_group_name, log_stream_name, num_lines):
     logs = boto3.client("logs")
     extra = {}
 
-    while True:
-        try:
-            events = logs.get_log_events(
-                logGroupName=log_group_name, logStreamName=log_stream_name, **extra
-            )
-        except ClientError:
-            yield {"message": "no logs"}
-            break
+    paginator = logs.get_paginator("filter_log_events")
+    response_iterator = paginator.paginate(
+        logGroupName=log_group_name, logStreamNames=[log_stream_name]
+    )
 
-        if not events["events"]:
-            break
-
-        yield from events["events"]
-
-        if events["nextForwardToken"]:
-            extra = {"nextToken": events["nextForwardToken"]}
-        else:
-            break
+    return [event for page in response_iterator for event in page["events"]][-num_lines:]
 
 
 def run_task(rule):
