@@ -2,7 +2,15 @@ import sys
 import time
 import click
 from tabulate import tabulate
-from .utils import get_rules_by_prefix, get_logs_for_rule, get_log_for_run, format_seconds
+from .utils import (
+    get_rules_by_prefix,
+    get_logs_for_rule,
+    get_log_for_run,
+    format_seconds,
+    run_task,
+)
+
+HASH_LENGTH = 6
 
 
 @click.group()
@@ -42,7 +50,6 @@ def runs(job_name, n):
 
         Runs are referred to by hash ids.
     """
-    hash_length = 6
     log_group, runs = get_logs_for_rule(job_name, n)
     display_runs = []
     for log in runs:
@@ -51,7 +58,7 @@ def runs(job_name, n):
         elapsed = format_seconds((last - first) / 1000)
         display_runs.append(
             [
-                click.style(log["logStreamName"][-hash_length:], bold=True),
+                click.style(log["logStreamName"][-HASH_LENGTH:], bold=True),
                 time.ctime(last / 1000),
                 elapsed,
             ]
@@ -69,7 +76,8 @@ def logs(job_name, log_id, n, timestamp):
     """
         Show logs for specific run.
 
-        If LOG_ID is provided, will show a specific log, otherwise the latest log will be displayed.
+        If LOG_ID is provided, will show a specific log, otherwise the latest log
+        will be displayed.
     """
     log_group, runs = get_logs_for_rule(job_name, 10)
     if log_id == "latest":
@@ -88,9 +96,22 @@ def logs(job_name, log_id, n, timestamp):
         click.echo(line["message"])
 
 
+@click.command()
+@click.argument("job-name")
+def run(job_name):
+    """
+        Kick off a run of a task.
+
+        This will use the same settings as configured in the scheduled task.
+    """
+    task_id = run_task(job_name)
+    click.secho(f"started run {task_id[-HASH_LENGTH:]}", fg="green")
+
+
 cli.add_command(tasks)
 cli.add_command(runs)
 cli.add_command(logs)
+cli.add_command(run)
 
 if __name__ == "__main__":
     cli()

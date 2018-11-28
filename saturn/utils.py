@@ -1,5 +1,4 @@
 import boto3
-import time
 import json
 
 
@@ -47,10 +46,8 @@ def get_rules_by_prefix(prefix):
                 "name": rule["Name"],
                 "schedule": rule["ScheduleExpression"],
                 "enabled": rule["State"] == "ENABLED",
-                # "target_ecs_parameters": target.get("EcsParameters"),
                 "target_arn": target["Arn"],
                 "target_id": target["Id"],
-                # "target_input": target.get("Input"],
                 "target_role_arn": target.get("RoleArn"),
                 "target_command": target_command,
             }
@@ -98,8 +95,6 @@ def get_logs_for_rule(rule_name, n):
 
 def get_log_for_run(log_group_name, log_stream_name, num_lines):
     logs = boto3.client("logs")
-    extra = {}
-
     paginator = logs.get_paginator("filter_log_events")
     response_iterator = paginator.paginate(
         logGroupName=log_group_name, logStreamNames=[log_stream_name]
@@ -108,30 +103,31 @@ def get_log_for_run(log_group_name, log_stream_name, num_lines):
     return [event for page in response_iterator for event in page["events"]][-num_lines:]
 
 
-def run_task(rule):
+def run_task(rule_name):
     ecs = boto3.client("ecs")
 
-    task_def = ecs.describe_task_definition(
-        taskDefinition=rule["target_ecs_parameters"]["TaskDefinitionArn"]
-    )["taskDefinition"]
+    target = get_target_for_rule(rule_name)
+    ecs_parameters = target.get("EcsParameters")
 
-    # AWS is annoyingly inconsistent w/ case here
+    task_def = ecs.describe_task_definition(taskDefinition=ecs_parameters["TaskDefinitionArn"])[
+        "taskDefinition"
+    ]
+
+    # AWS is annoyingly inconsistent w/ case here so we have to lower case the first char
     mutated_network_config = {}
-    for key, val in rule["target_ecs_parameters"]["NetworkConfiguration"][
-        "awsvpcConfiguration"
-    ].items():
+    for key, val in ecs_parameters["NetworkConfiguration"]["awsvpcConfiguration"].items():
         new_key = key[:1].lower() + key[1:]
         mutated_network_config[new_key] = val
 
     response = ecs.run_task(
-        cluster=rule["target_arn"],
+        cluster=target["Arn"],
         startedBy="saturn",  # TODO: fix this
         taskDefinition=task_def["taskDefinitionArn"],
-        count=rule["target_ecs_parameters"]["TaskCount"],
-        launchType=rule["target_ecs_parameters"]["LaunchType"],
+        count=ecs_parameters["TaskCount"],
+        launchType=ecs_parameters["LaunchType"],
         networkConfiguration={"awsvpcConfiguration": mutated_network_config},
         # does this need to specify platformVersion?
-        overrides=json.loads(rule["target_input"]),
+        overrides=json.loads(target["Input"]),
     )
 
     if len(response["tasks"]) == 1 and len(response["failures"]) == 0:
