@@ -71,8 +71,9 @@ def runs(job_name, n):
 @click.argument("job-name")
 @click.argument("log-id", default="latest")
 @click.option("-n", default=50, help="number of lines to print")
+@click.option("--watch/--no-watch", help="watch log until user breaks")
 @click.option("--timestamp/--no-timestamp", help="add timestamp")
-def logs(job_name, log_id, n, timestamp):
+def logs(job_name, log_id, n, watch, timestamp):
     """
         Show logs for specific run.
 
@@ -90,7 +91,7 @@ def logs(job_name, log_id, n, timestamp):
             click.secho("no such run", fg="red")
             sys.exit(1)
 
-    for line in get_log_for_run(log_group, run["logStreamName"], n):
+    for line in get_log_for_run(log_group, run["logStreamName"], n, watch):
         if timestamp:
             click.secho(time.ctime(line["timestamp"] / 1000) + " ", fg="blue", nl=False)
         click.echo(line["message"])

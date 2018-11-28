@@ -1,5 +1,6 @@
-import boto3
+import time
 import json
+import boto3
 
 
 class StopPagination(Exception):
@@ -93,14 +94,29 @@ def get_logs_for_rule(rule_name, n):
     return log_group, log_streams
 
 
-def get_log_for_run(log_group_name, log_stream_name, num_lines):
+def get_log_for_run(log_group_name, log_stream_name, num_lines, watch):
     logs = boto3.client("logs")
     paginator = logs.get_paginator("filter_log_events")
     response_iterator = paginator.paginate(
         logGroupName=log_group_name, logStreamNames=[log_stream_name]
     )
 
-    return [event for page in response_iterator for event in page["events"]][-num_lines:]
+    if watch:
+        while True:
+            for page in response_iterator:
+                for event in page["events"]:
+                    yield event
+
+            # sleep for a bit then get a new iterator to pick up new values
+            time.sleep(2)
+            response_iterator = paginator.paginate(
+                logGroupName=log_group_name,
+                logStreamNames=[log_stream_name],
+                startTime=event["timestamp"] + 1,
+            )
+
+    else:
+        yield from [event for page in response_iterator for event in page["events"]][-num_lines:]
 
 
 def run_task(rule_name):
