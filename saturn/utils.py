@@ -16,30 +16,43 @@ def format_seconds(seconds):
 def get_target_for_rule(name):
     events = boto3.client("events")
     targets = events.list_targets_by_rule(Rule=name)["Targets"]
-    if len(targets) != 1:
-        raise NotImplementedError("too many targets")
-    return targets[0]
+    if len(targets) == 1:
+        return targets[0]
 
 
 def get_rules_by_prefix(prefix):
     events = boto3.client("events")
-    rules = events.list_rules(NamePrefix=prefix)["Rules"]
+    if prefix:
+        rules = events.list_rules(NamePrefix=prefix)["Rules"]
+    else:
+        rules = events.list_rules()["Rules"]
     results = []
     for rule in rules:
         target = get_target_for_rule(rule["Name"])
+
+        if "ScheduleExpression" not in rule or not target:
+            continue
+
+        if target.get("Input"):
+            target_command = " ".join(
+                json.loads(target["Input"])["containerOverrides"][0]["command"]
+            )
+        else:
+            target_command = ""
+            if not target_command:
+                continue
+
         results.append(
             {
                 "name": rule["Name"],
                 "schedule": rule["ScheduleExpression"],
                 "enabled": rule["State"] == "ENABLED",
-                "target_ecs_parameters": target["EcsParameters"],
+                # "target_ecs_parameters": target.get("EcsParameters"),
                 "target_arn": target["Arn"],
                 "target_id": target["Id"],
-                "target_input": target["Input"],
-                "target_role_arn": target["RoleArn"],
-                "target_command": " ".join(
-                    json.loads(target["Input"])["containerOverrides"][0]["command"]
-                ),
+                # "target_input": target.get("Input"],
+                "target_role_arn": target.get("RoleArn"),
+                "target_command": target_command,
             }
         )
     return results

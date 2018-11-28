@@ -1,7 +1,7 @@
 saturn
 ======
 
-a tool for dealing with scheduled tasks on ECS
+a tool for working with scheduled tasks on ECS
 
 Features:
 
@@ -15,9 +15,3 @@ Not Currently Supported:
 * live tail of logs
 * scheduling jobs
 * complex jobs with multiple containers
-
-to come via site:
-
-- dashboard of all jobs
-- job page w/ list of logs and view of latest log
-- start a new job

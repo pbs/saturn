@@ -11,12 +11,12 @@ def cli():
 
 
 @click.command()
-def tasks():
+@click.argument("prefix", default="")
+def tasks(prefix):
     """
         List currently scheduled tasks.
     """
-    # TODO: make prefix configurable
-    rules = get_rules_by_prefix("update-")
+    rules = get_rules_by_prefix(prefix)
 
     display_rules = []
 
@@ -65,7 +65,7 @@ def runs(job_name, n):
 @click.argument("log-id", default="latest")
 @click.option("-n", default=50, help="number of lines to print")
 @click.option("--timestamp/--no-timestamp", help="add timestamp")
-def logs(job_name, log_id, n, page, timestamp):
+def logs(job_name, log_id, n, timestamp):
     """
         Show logs for specific run.
 
