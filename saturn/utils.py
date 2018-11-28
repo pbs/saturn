@@ -3,46 +3,55 @@ import time
 import json
 
 
+class StopPagination(Exception):
+    """ used to break out of pagination loops """
+
+
+def format_seconds(seconds):
+    seconds = int(seconds)
+    elapsed = f'{seconds//3600}:{(seconds%3600//60):02d}:{seconds%3600%60:02d}'
+    return elapsed
+
+
+def get_target_for_rule(name):
+    events = boto3.client("events")
+    targets = events.list_targets_by_rule(Rule=name)["Targets"]
+    if len(targets) != 1:
+        raise NotImplementedError("too many targets")
+    return targets[0]
+
+
 def get_rules_by_prefix(prefix):
     events = boto3.client("events")
     rules = events.list_rules(NamePrefix=prefix)["Rules"]
     results = []
     for rule in rules:
-        targets = events.list_targets_by_rule(Rule=rule["Name"])["Targets"]
-        if len(targets) != 1:
-            raise NotImplementedError("too many targets")
-        # unused: Arn, Description,
+        target = get_target_for_rule(rule["Name"])
         results.append(
             {
                 "name": rule["Name"],
                 "schedule": rule["ScheduleExpression"],
                 "enabled": rule["State"] == "ENABLED",
-                "target_ecs_parameters": targets[0]["EcsParameters"],
-                "target_arn": targets[0]["Arn"],
-                "target_id": targets[0]["Id"],
-                "target_input": targets[0]["Input"],
-                "target_role_arn": targets[0]["RoleArn"],
+                "target_ecs_parameters": target["EcsParameters"],
+                "target_arn": target["Arn"],
+                "target_id": target["Id"],
+                "target_input": target["Input"],
+                "target_role_arn": target["RoleArn"],
                 "target_command": " ".join(
-                    json.loads(targets[0]["Input"])["containerOverrides"][0]["command"]
+                    json.loads(target["Input"])["containerOverrides"][0]["command"]
                 ),
             }
         )
     return results
 
 
-def get_rule_by_name(job_name):
-    # TODO: optimize this, skip the list and go straight to rule
-    rules = get_rules_by_prefix("update-")
-    for rule in rules:
-        if rule["name"] == job_name:
-            return rule
-
-
-def get_logs_for_rule(rule):
+def get_logs_for_rule(rule_name, n):
     ecs = boto3.client("ecs")
+    logs = boto3.client("logs")
 
+    target = get_target_for_rule(rule_name)
     task_def = ecs.describe_task_definition(
-        taskDefinition=rule["target_ecs_parameters"]["TaskDefinitionArn"]
+        taskDefinition=target["EcsParameters"]["TaskDefinitionArn"]
     )["taskDefinition"]
     if len(task_def["containerDefinitions"]) > 1:
         raise NotImplementedError("too many containers")
@@ -52,17 +61,26 @@ def get_logs_for_rule(rule):
     log_group = log_config["options"]["awslogs-group"]
     log_prefix = log_config["options"]["awslogs-stream-prefix"]
     name = task_def["containerDefinitions"][0]["name"]
-    return log_group, get_log_streams(log_group, f"{log_prefix}/{name}/")
 
-
-def get_log_streams(log_group, prefix=""):
-    logs = boto3.client("logs")
-    # if we pass logStreamNamePrefix, we can't order by date (?!) so
-    # we'll just filter manually
-    response = logs.describe_log_streams(
+    prefix = f"{log_prefix}/{name}/"
+    paginator = logs.get_paginator("describe_log_streams")
+    # if we pass logStreamNamePrefix, we can't order by date(?!) so filter manually
+    response_iterator = paginator.paginate(
         logGroupName=log_group, orderBy="LastEventTime", descending=True
     )
-    return [ls for ls in response["logStreams"] if ls["logStreamName"].startswith(prefix)]
+
+    log_streams = []
+    try:
+        for page in response_iterator:
+            for ls in page["logStreams"]:
+                if ls["logStreamName"].startswith(prefix):
+                    log_streams.append(ls)
+                    if len(log_streams) >= n:
+                        raise StopPagination()
+    except StopPagination:
+        pass
+
+    return log_group, log_streams
 
 
 def get_log_for_run(log_group_name, log_stream_name):

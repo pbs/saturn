@@ -1,7 +1,7 @@
 import time
 import click
 from tabulate import tabulate
-from .utils import get_rules_by_prefix, get_logs_for_rule, get_rule_by_name, get_log_for_run
+from .utils import get_rules_by_prefix, get_logs_for_rule, get_log_for_run, format_seconds
 
 
 @click.group()
@@ -10,7 +10,10 @@ def cli():
 
 
 @click.command()
-def list():
+def tasks():
+    """
+        List currently scheduled tasks.
+    """
     # TODO: make prefix configurable
     rules = get_rules_by_prefix("update-")
 
@@ -31,24 +34,38 @@ def list():
 
 @click.command()
 @click.argument("job-name")
-def runs(job_name):
-    # TODO: make number of logs and display characters of hash configurable
-    rule = get_rule_by_name(job_name)
-    log_group, runs = get_logs_for_rule(rule)
-    for log in runs:
-        print(
-            click.style(log["logStreamName"][-4:], bold=True),
-            time.ctime(log["firstEventTimestamp"] / 1000),
-            time.ctime(log["lastEventTimestamp"] / 1000),
-        )
+@click.option("-n", default=5, help="number of runs to show")
+def runs(job_name, n):
+    """
+        List most recent N runs of JOB_NAME.
 
+        Runs are referred to by hash ids.
+    """
+    hash_length = 6
+    log_group, runs = get_logs_for_rule(job_name, n)
+    display_runs = []
+    for log in runs:
+        first = log["firstEventTimestamp"]
+        last = log["lastEventTimestamp"]
+        elapsed = format_seconds((last - first) / 1000)
+        display_runs.append([
+            click.style(log["logStreamName"][-hash_length:], bold=True),
+            time.ctime(log["lastEventTimestamp"] / 1000),
+            elapsed
+        ])
+
+    click.echo(tabulate(display_runs, headers=["run id", "last event", "elapsed"]))
 
 @click.command()
 @click.argument("job-name")
 @click.argument("log-id", default="latest")
 def logs(job_name, log_id):
-    rule = get_rule_by_name(job_name)
-    log_group, runs = get_logs_for_rule(rule)
+    """
+        Show logs for specific run.
+
+        If LOG_ID is provided, will show a specific log, otherwise the latest log will be displayed.
+    """
+    log_group, runs = get_logs_for_rule(job_name, 1)
     if log_id == "latest":
         run = runs[0]
     else:
@@ -62,7 +79,7 @@ def logs(job_name, log_id):
         print(click.style(time.ctime(line["timestamp"] / 1000), fg="blue"), line["message"])
 
 
-cli.add_command(list)
+cli.add_command(tasks)
 cli.add_command(runs)
 cli.add_command(logs)
 
