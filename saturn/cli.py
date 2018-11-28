@@ -75,27 +75,26 @@ def runs(job_name, n, detailed):
 
 @click.command()
 @click.argument("job-name")
-@click.argument("log-id", default="latest")
+@click.argument("run-id", default="latest")
 @click.option("-n", default=50, help="number of lines to print")
 @click.option("--watch/--no-watch", help="watch log until user breaks")
 @click.option("--timestamp/--no-timestamp", help="add timestamp")
-def logs(job_name, log_id, n, watch, timestamp):
+def logs(job_name, run_id, n, watch, timestamp):
     """
         Show logs for specific run.
 
-        If LOG_ID is provided, will show a specific log, otherwise the latest log
+        If RUN_ID is provided, will show a specific run, otherwise the latest run
         will be displayed.
     """
-    log_group, runs = get_runs_for_rule(job_name, 10)
-    if log_id == "latest":
+    if run_id == "latest":
+        log_group, runs = get_runs_for_rule(job_name, n=1)
         run = runs[0]
     else:
-        for run in runs:
-            if run["logStreamName"].endswith(log_id):
-                break
-        else:
+        log_group, runs = get_runs_for_rule(job_name, run_id=run_id)
+        if not runs:
             click.secho("no such run", fg="red")
             sys.exit(1)
+        run = runs[0]
 
     for line in get_log_for_run(log_group, run["logStreamName"], n, watch):
         if timestamp:
@@ -105,7 +104,9 @@ def logs(job_name, log_id, n, watch, timestamp):
 
 @click.command()
 @click.argument("job-name")
-def run(job_name):
+@click.option("--watch/--no-watch", help="watch log until user breaks")
+@click.pass_context
+def run(ctx, job_name, watch):
     """
         Kick off a run of a task.
 
@@ -113,6 +114,27 @@ def run(job_name):
     """
     cluster_id, task_id = run_task(job_name)
     click.secho(f"started run {task_id[-HASH_LENGTH:]}", fg="green")
+
+    if watch:
+        run_id = task_id.split("/")[-1]
+        run = None
+
+        # wait for the logs to start
+        click.echo("waiting for logs to appear", nl=False)
+        time.sleep(30)
+        while True:
+            log_group, runs = get_runs_for_rule(job_name, run_id=run_id)
+            if runs:
+                run = runs[0]
+                break
+            click.echo(".", nl=False)
+            time.sleep(5)
+
+        click.secho("done!", fg="green")
+
+        # ok the logs are ready
+        for line in get_log_for_run(log_group, run["logStreamName"], 100, watch):
+            click.echo(line["message"])
 
 
 cli.add_command(tasks)

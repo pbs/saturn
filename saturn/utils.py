@@ -34,9 +34,12 @@ def get_rules_by_prefix(prefix):
             continue
 
         if target.get("Input"):
-            target_command = " ".join(
-                json.loads(target["Input"])["containerOverrides"][0]["command"]
-            )
+            try:
+                target_command = " ".join(
+                    json.loads(target["Input"])["containerOverrides"][0]["command"]
+                )
+            except KeyError:
+                target_command = ""
         else:
             target_command = ""
             if not target_command:
@@ -56,7 +59,7 @@ def get_rules_by_prefix(prefix):
     return results
 
 
-def get_runs_for_rule(rule_name, n, detailed=False):
+def get_runs_for_rule(rule_name, n=50, run_id=None, detailed=False):
     ecs = boto3.client("ecs")
     logs = boto3.client("logs")
 
@@ -85,9 +88,16 @@ def get_runs_for_rule(rule_name, n, detailed=False):
         for page in response_iterator:
             for ls in page["logStreams"]:
                 if ls["logStreamName"].startswith(prefix):
-                    log_streams.append(ls)
-                    if len(log_streams) >= n:
-                        raise StopPagination()
+                    # two modes: run_id will stop when we find the log matching the ID,
+                    #  whereas n will run until that many logs are collected
+                    if run_id:
+                        if ls["logStreamName"].endswith(run_id):
+                            log_streams.append(ls)
+                            raise StopPagination()
+                    else:
+                        log_streams.append(ls)
+                        if len(log_streams) >= n:
+                            raise StopPagination()
     except StopPagination:
         pass
 
@@ -103,6 +113,7 @@ def get_runs_for_rule(rule_name, n, detailed=False):
 
 
 def get_task_status(cluster_arn, task_arn):
+    # TODO: probably should replace this with a bulk get
     ecs = boto3.client("ecs")
     tasks = ecs.describe_tasks(cluster=cluster_arn, tasks=[task_arn])["tasks"]
     if not tasks:
@@ -115,6 +126,7 @@ def get_task_status(cluster_arn, task_arn):
 
 
 def get_log_for_run(log_group_name, log_stream_name, num_lines, watch):
+    # params look like /ecs/tvss/qa/scheduled ecs/update-shows-episodes-schedules/f2e6a99d-b316-434b-a0d3-ae82f64b4788
     logs = boto3.client("logs")
     paginator = logs.get_paginator("filter_log_events")
     response_iterator = paginator.paginate(
@@ -122,19 +134,20 @@ def get_log_for_run(log_group_name, log_stream_name, num_lines, watch):
     )
 
     if watch:
+        latest_timestamp = 0
         while True:
             for page in response_iterator:
                 for event in page["events"]:
                     yield event
+                    latest_timestamp = event["timestamp"]
 
             # sleep for a bit then get a new iterator to pick up new values
             time.sleep(2)
             response_iterator = paginator.paginate(
                 logGroupName=log_group_name,
                 logStreamNames=[log_stream_name],
-                startTime=event["timestamp"] + 1,
+                startTime=latest_timestamp + 1,
             )
-
     else:
         yield from [event for page in response_iterator for event in page["events"]][-num_lines:]
 
