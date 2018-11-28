@@ -53,7 +53,7 @@ def runs(job_name, n, detailed):
 
         Runs are referred to by hash ids.
     """
-    log_group, runs = get_runs_for_rule(job_name, n, detailed)
+    log_group, runs = get_runs_for_rule(job_name, n, detailed=detailed)
     display_runs = []
     for log in runs:
         first = log["firstEventTimestamp"]
