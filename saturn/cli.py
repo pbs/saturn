@@ -18,6 +18,7 @@ def cli():
     pass
 
 
+@cli.add_command
 @click.command()
 @click.argument("prefix", default="")
 def tasks(prefix):
@@ -41,6 +42,7 @@ def tasks(prefix):
     click.echo(tabulate(display_rules, tablefmt="plain"))
 
 
+@cli.add_command
 @click.command()
 @click.argument("job-name")
 @click.option("-n", default=5, help="number of runs to show")
@@ -73,6 +75,7 @@ def runs(job_name, n, detailed):
     click.echo(tabulate(display_runs, headers=headers))
 
 
+@cli.add_command
 @click.command()
 @click.argument("job-name")
 @click.argument("run-id", default="latest")
@@ -102,11 +105,12 @@ def logs(job_name, run_id, n, watch, timestamp):
         click.echo(line["message"])
 
 
+@cli.add_command
 @click.command()
 @click.argument("job-name")
 @click.option("--watch/--no-watch", help="watch log until user breaks")
 @click.pass_context
-def run(ctx, job_name, watch):
+def start(ctx, job_name, watch):
     """
         Kick off a run of a task.
 
@@ -136,11 +140,6 @@ def run(ctx, job_name, watch):
         for line in get_log_for_run(log_group, run["logStreamName"], 100, watch):
             click.echo(line["message"])
 
-
-cli.add_command(tasks)
-cli.add_command(runs)
-cli.add_command(logs)
-cli.add_command(run)
 
 if __name__ == "__main__":
     cli()

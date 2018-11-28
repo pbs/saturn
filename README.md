@@ -52,5 +52,5 @@ $ saturn logs update-sources-qa ac97a1
 ### Starting one-off runs of existing jobs
 
 ```
-$ saturn run update-sources-qa
+$ saturn start update-sources-qa --watch
 ```
