@@ -13,7 +13,7 @@ def format_seconds(seconds):
     return elapsed
 
 
-def get_target_for_rule(name):
+def _get_target_for_rule(name):
     events = boto3.client("events")
     targets = events.list_targets_by_rule(Rule=name)["Targets"]
     if len(targets) == 1:
@@ -26,11 +26,13 @@ def get_rules_by_prefix(prefix):
         rules = events.list_rules(NamePrefix=prefix)["Rules"]
     else:
         rules = events.list_rules()["Rules"]
+
     results = []
     for rule in rules:
-        target = get_target_for_rule(rule["Name"])
+        target = _get_target_for_rule(rule["Name"])
 
         if "ScheduleExpression" not in rule or not target:
+            print(rule.get("ScheduleExpression"), target)
             continue
 
         if target.get("Input"):
@@ -39,11 +41,9 @@ def get_rules_by_prefix(prefix):
                     json.loads(target["Input"])["containerOverrides"][0]["command"]
                 )
             except KeyError:
-                target_command = ""
-        else:
-            target_command = ""
-            if not target_command:
                 continue
+        else:
+            continue
 
         results.append(
             {
@@ -63,7 +63,7 @@ def get_runs_for_rule(rule_name, n=50, run_id=None, detailed=False):
     ecs = boto3.client("ecs")
     logs = boto3.client("logs")
 
-    target = get_target_for_rule(rule_name)
+    target = _get_target_for_rule(rule_name)
     task_def = ecs.describe_task_definition(
         taskDefinition=target["EcsParameters"]["TaskDefinitionArn"]
     )["taskDefinition"]
@@ -107,12 +107,12 @@ def get_runs_for_rule(rule_name, n=50, run_id=None, detailed=False):
             run_id = ls["arn"].rsplit("/", 1)[1]
             _, _, _, region, account, *_ = ls["arn"].split(":")
             task_arn = f"arn:aws:ecs:{region}:{account}:task/{run_id}"
-            ls.update(get_task_status(target["Arn"], task_arn))
+            ls.update(_get_task_status(target["Arn"], task_arn))
 
     return log_group, log_streams
 
 
-def get_task_status(cluster_arn, task_arn):
+def _get_task_status(cluster_arn, task_arn):
     # TODO: probably should replace this with a bulk get
     ecs = boto3.client("ecs")
     tasks = ecs.describe_tasks(cluster=cluster_arn, tasks=[task_arn])["tasks"]
@@ -126,7 +126,6 @@ def get_task_status(cluster_arn, task_arn):
 
 
 def get_log_for_run(log_group_name, log_stream_name, num_lines, watch):
-    # params look like /ecs/tvss/qa/scheduled ecs/update-shows-episodes-schedules/f2e6a99d-b316-434b-a0d3-ae82f64b4788
     logs = boto3.client("logs")
     paginator = logs.get_paginator("filter_log_events")
     response_iterator = paginator.paginate(
@@ -155,7 +154,7 @@ def get_log_for_run(log_group_name, log_stream_name, num_lines, watch):
 def run_task(rule_name):
     ecs = boto3.client("ecs")
 
-    target = get_target_for_rule(rule_name)
+    target = _get_target_for_rule(rule_name)
     ecs_parameters = target.get("EcsParameters")
 
     task_def = ecs.describe_task_definition(taskDefinition=ecs_parameters["TaskDefinitionArn"])[

@@ -19,7 +19,7 @@ setup(
     entry_points="""[console_scripts]
   saturn = saturn.cli:cli""",
     install_requires=["Click==7.0", "tabulate==0.8.2", "boto3"],
-    extras_require={"dev": ["black"]},
+    extras_require={"dev": ["black", "moto", "pytest"]},
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
