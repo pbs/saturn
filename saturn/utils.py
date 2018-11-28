@@ -56,7 +56,7 @@ def get_rules_by_prefix(prefix):
     return results
 
 
-def get_logs_for_rule(rule_name, n):
+def get_runs_for_rule(rule_name, n, detailed=False):
     ecs = boto3.client("ecs")
     logs = boto3.client("logs")
 
@@ -91,7 +91,27 @@ def get_logs_for_rule(rule_name, n):
     except StopPagination:
         pass
 
+    if detailed:
+        for ls in log_streams:
+            # parse the log ARN here to build a task ARN
+            run_id = ls["arn"].rsplit("/", 1)[1]
+            _, _, _, region, account, *_ = ls["arn"].split(":")
+            task_arn = f"arn:aws:ecs:{region}:{account}:task/{run_id}"
+            ls.update(get_task_status(target["Arn"], task_arn))
+
     return log_group, log_streams
+
+
+def get_task_status(cluster_arn, task_arn):
+    ecs = boto3.client("ecs")
+    tasks = ecs.describe_tasks(cluster=cluster_arn, tasks=[task_arn])["tasks"]
+    if not tasks:
+        return {"status": "", "exit_code": ""}
+    # it should be safe to assume by this point that there is only one task & container
+    return {
+        "status": tasks[0]["lastStatus"],
+        "exit_code": tasks[0]["containers"][0].get("exitCode", ""),
+    }
 
 
 def get_log_for_run(log_group_name, log_stream_name, num_lines, watch):
@@ -147,6 +167,6 @@ def run_task(rule_name):
     )
 
     if len(response["tasks"]) == 1 and len(response["failures"]) == 0:
-        return response["tasks"][0]["taskArn"]
+        return target["Arn"], response["tasks"][0]["taskArn"]
     else:
         print("ERROR:", response["failures"])

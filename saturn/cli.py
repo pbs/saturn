@@ -4,7 +4,7 @@ import click
 from tabulate import tabulate
 from .utils import (
     get_rules_by_prefix,
-    get_logs_for_rule,
+    get_runs_for_rule,
     get_log_for_run,
     format_seconds,
     run_task,
@@ -44,27 +44,33 @@ def tasks(prefix):
 @click.command()
 @click.argument("job-name")
 @click.option("-n", default=5, help="number of runs to show")
-def runs(job_name, n):
+@click.option("--detailed/--no-detailed", help="get detailed information on the runs")
+def runs(job_name, n, detailed):
     """
         List most recent N runs of JOB_NAME.
 
         Runs are referred to by hash ids.
     """
-    log_group, runs = get_logs_for_rule(job_name, n)
+    log_group, runs = get_runs_for_rule(job_name, n, detailed)
     display_runs = []
     for log in runs:
         first = log["firstEventTimestamp"]
         last = log["lastEventTimestamp"]
         elapsed = format_seconds((last - first) / 1000)
-        display_runs.append(
-            [
-                click.style(log["logStreamName"][-HASH_LENGTH:], bold=True),
-                time.ctime(last / 1000),
-                elapsed,
-            ]
-        )
+        cols = [
+            click.style(log["logStreamName"][-HASH_LENGTH:], bold=True),
+            time.ctime(last / 1000),
+            elapsed,
+        ]
+        if detailed:
+            cols += [log["status"], log["exit_code"]]
+        display_runs.append(cols)
 
-    click.echo(tabulate(display_runs, headers=["run id", "last event", "elapsed"]))
+    headers = ["run id", "last event", "elapsed"]
+    if detailed:
+        headers += ["status", "exit code"]
+
+    click.echo(tabulate(display_runs, headers=headers))
 
 
 @click.command()
@@ -80,7 +86,7 @@ def logs(job_name, log_id, n, watch, timestamp):
         If LOG_ID is provided, will show a specific log, otherwise the latest log
         will be displayed.
     """
-    log_group, runs = get_logs_for_rule(job_name, 10)
+    log_group, runs = get_runs_for_rule(job_name, 10)
     if log_id == "latest":
         run = runs[0]
     else:
@@ -105,7 +111,7 @@ def run(job_name):
 
         This will use the same settings as configured in the scheduled task.
     """
-    task_id = run_task(job_name)
+    cluster_id, task_id = run_task(job_name)
     click.secho(f"started run {task_id[-HASH_LENGTH:]}", fg="green")
 
 
