@@ -74,7 +74,7 @@ def get_runs_for_rule(rule_name, n=50, run_id=None, detailed=False):
     log_config = task_def["containerDefinitions"][0]["logConfiguration"]
     log_group = log_config["options"]["awslogs-group"]
     log_prefix = log_config["options"]["awslogs-stream-prefix"]
-    name = task_def["containerDefinitions"][0]["name"]
+    name = json.loads(target["Input"])["containerOverrides"][0]["name"]
 
     prefix = f"{log_prefix}/{name}/"
     paginator = logs.get_paginator("describe_log_streams")
