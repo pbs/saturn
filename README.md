@@ -1,24 +1,22 @@
 saturn
 ======
 
-a new way to process tasks
+a tool for dealing with scheduled tasks on ECS
 
-aws stuff:
+Features:
 
-- ~~get list of jobs~~
-- ~~get list of logs~~
-- ~~get log entries~~
-- ~~trigger a job~~
-- live tail of logs?
+* show scheduled jobs
+* see runs of scheduled jobs
+* view logs of individual runs
+* start one-off run of job
 
-cli:
+Not Currently Supported:
 
-- ~~list jobs~~
-- ~~list runs~~
-- ~~tail log (default to latest, but allow selection)~~
-- start job
+* live tail of logs
+* scheduling jobs
+* complex jobs with multiple containers
 
-website:
+to come via site:
 
 - dashboard of all jobs
 - job page w/ list of logs and view of latest log
