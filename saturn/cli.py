@@ -109,14 +109,15 @@ def logs(job_name, run_id, n, watch, timestamp):
 @click.command()
 @click.argument("job-name")
 @click.option("--watch/--no-watch", help="watch log until user breaks")
+@click.option("--command", help="override command")
 @click.pass_context
-def start(ctx, job_name, watch):
+def start(ctx, job_name, watch, command):
     """
         Kick off a run of a task.
 
         This will use the same settings as configured in the scheduled task.
     """
-    cluster_id, task_id = run_task(job_name)
+    cluster_id, task_id = run_task(job_name, command)
     click.secho(f"started run {task_id[-HASH_LENGTH:]}", fg="green")
 
     if watch:

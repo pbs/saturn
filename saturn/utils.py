@@ -151,7 +151,7 @@ def get_log_for_run(log_group_name, log_stream_name, num_lines, watch):
         yield from [event for page in response_iterator for event in page["events"]][-num_lines:]
 
 
-def run_task(rule_name):
+def run_task(rule_name, command=None):
     ecs = boto3.client("ecs")
 
     target = _get_target_for_rule(rule_name)
@@ -167,6 +167,10 @@ def run_task(rule_name):
         new_key = key[:1].lower() + key[1:]
         mutated_network_config[new_key] = val
 
+    overrides = json.loads(target["Input"])
+    if command:
+        overrides["containerOverrides"][0]["command"] = command.split()
+
     response = ecs.run_task(
         cluster=target["Arn"],
         startedBy="saturn",  # TODO: fix this
@@ -175,7 +179,7 @@ def run_task(rule_name):
         launchType=ecs_parameters["LaunchType"],
         networkConfiguration={"awsvpcConfiguration": mutated_network_config},
         # does this need to specify platformVersion?
-        overrides=json.loads(target["Input"]),
+        overrides=overrides,
     )
 
     if len(response["tasks"]) == 1 and len(response["failures"]) == 0:
