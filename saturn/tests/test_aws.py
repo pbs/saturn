@@ -32,8 +32,13 @@ def build_fake_env():
             "command": "./c",
             "runs": ["4", "5", "6"],
         },
-        {"name": "other-x", "target_id": "xxx", "target_arn": "other-task:1", "command": "./x",
-         "runs": [] },
+        {
+            "name": "other-x",
+            "target_id": "xxx",
+            "target_arn": "other-task:1",
+            "command": "./x",
+            "runs": [],
+        },
     ]
 
     logs.create_log_group(logGroupName="ecs/logs")
@@ -64,8 +69,9 @@ def build_fake_env():
             Rule=e["name"],
             Targets=[
                 {
-                    "Input": json.dumps({"containerOverrides": [{"name": e["name"],
-                                                                 "command": e["command"]}]}),
+                    "Input": json.dumps(
+                        {"containerOverrides": [{"name": e["name"], "command": e["command"]}]}
+                    ),
                     "Id": e["target_id"],
                     "Arn": "cluster-arn",
                     "EcsParameters": {
@@ -76,8 +82,9 @@ def build_fake_env():
             ],
         )
         for run in e["runs"]:
-            logs.create_log_stream(logGroupName="ecs/logs",
-                                   logStreamName=f"ecs/logs/{e['name']}/{run}")
+            logs.create_log_stream(
+                logGroupName="ecs/logs", logStreamName=f"ecs/logs/{e['name']}/{run}"
+            )
 
 
 @mock_ecs
