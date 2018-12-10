@@ -2,3 +2,6 @@
 
 dist/
 *.egg-info
+
+# no lock check-in
+poetry.lock
